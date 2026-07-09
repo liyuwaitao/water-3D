@@ -502,14 +502,32 @@
             scene.add(zLabel);
         }
 
+        function drawRoundedRect(ctx, x, y, width, height, radius) {
+            const r = Math.min(radius, width / 2, height / 2);
+            if (typeof ctx.roundRect === 'function') {
+                ctx.beginPath();
+                ctx.roundRect(x, y, width, height, r);
+                return;
+            }
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height - r);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            ctx.lineTo(x + r, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+        }
+
         function createTextSprite(text, color) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 512;
             canvas.height = 128;
             ctx.fillStyle = 'rgba(10, 10, 26, 0.9)';
-            ctx.beginPath();
-            ctx.roundRect(0, 0, canvas.width, canvas.height, 12);
+            drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 12);
             ctx.fill();
             ctx.fillStyle = color;
             ctx.font = 'bold 24px Microsoft YaHei, sans-serif';
