@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>三维空间坐标可视化 - 算力水危机研究 | 3D Spatial Visualization - Computing Water Crisis Research</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        body { font-family: 'Microsoft YaHei', sans-serif; background: #0a0a1a; }
+        #container { width: 100vw; height: 100vh; position: relative; touch-action: none; }
+        #info-panel {
+            position: fixed; top: 20px; left: 20px; width: 400px;
+            background: rgba(20, 20, 40, 0.95); border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 12px; padding: 20px; color: #fff; z-index: 1000;
+            backdrop-filter: blur(10px); display: none; max-height: 85vh; overflow-y: auto;
+        }
+        #info-panel.active { display: block; }
+        #info-panel .close-btn {
+            position: absolute; top: 10px; right: 10px; width: 30px; height: 30px;
+            border: none; background: rgba(255, 100, 100, 0.2); color: #fff;
+            border-radius: 50%; cursor: pointer; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #info-panel h2 { color: #64d4ff; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid rgba(100, 212, 255, 0.3); padding-bottom: 10px; }
+        #info-panel .subtitle { color: #888; font-size: 13px; margin-bottom: 10px; }
+        #info-panel .path-color { display: inline-block; width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; vertical-align: middle; }
+        #info-panel p { line-height: 1.6; color: #ccc; margin-bottom: 10px; font-size: 13px; }
+        #info-panel .label { color: #a0c8ff; font-weight: bold; margin-bottom: 3px; font-size: 14px; }
+        #info-panel .label-en { color: #6688aa; font-size: 12px; margin-bottom: 8px; }
+        #info-panel .description { background: rgba(100, 212, 255, 0.05); padding: 10px; border-radius: 8px; border-left: 3px solid #64d4ff; font-size: 13px; }
+        #legend {
+            position: fixed; bottom: 20px; left: 20px;
+            background: rgba(20, 20, 40, 0.95); border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 12px; padding: 15px; color: #fff; z-index: 1000; backdrop-filter: blur(10px);
+        }
+        #legend h3 { font-size: 13px; margin-bottom: 8px; color: #64d4ff; }
+        #legend h3-en { font-size: 11px; color: #888; margin-bottom: 10px; }
+        #legend .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; }
+        #legend .legend-color { width: 16px; height: 16px; border-radius: 4px; margin-right: 10px; }
+        #legend .legend-line { width: 30px; height: 3px; margin-right: 10px; border-radius: 2px; }
+        .controls {
+            position: fixed; top: 20px; right: 20px;
+            background: rgba(20, 20, 40, 0.95); border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 12px; padding: 15px; color: #fff; z-index: 1000; backdrop-filter: blur(10px);
+        }
+        .controls button {
+            display: block; width: 100%; padding: 8px 12px; margin-bottom: 8px;
+            border: none; background: rgba(100, 212, 255, 0.2); color: #fff;
+            border-radius: 6px; cursor: pointer; font-size: 12px; transition: background 0.3s;
+        }
+        .controls button:hover { background: rgba(100, 212, 255, 0.4); }
+        .controls button:last-child { margin-bottom: 0; }
+        .controls .btn-en { font-size: 10px; color: #888; display: block; margin-top: 2px; }
+        .tooltip {
+            position: fixed; background: rgba(20, 20, 40, 0.95);
+            border: 1px solid rgba(100, 212, 255, 0.3); border-radius: 8px;
+            padding: 10px 15px; color: #fff; font-size: 12px; pointer-events: none;
+            z-index: 1001; backdrop-filter: blur(10px); display: none; max-width: 350px;
+        }
+        .title {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.95); border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 12px; padding: 12px 25px; color: #fff; z-index: 1000; backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        .title h1 { font-size: 16px; color: #64d4ff; margin-bottom: 3px; }
+        .title h1-en { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .title p { font-size: 11px; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div class="title">
+        <h1>算力扩张的水危机研究</h1>
+        <div class="h1-en">Computing Expansion Water Crisis Research</div>
+        <p>三维空间可视化 | 3D Spatial Visualization - Spatial Displacement × Scale Upgrade × Technical Paradox × Individual Attribution</p>
+    </div>
+    
+    <div id="info-panel">
+        <button class="close-btn" onclick="closeInfoPanel()">×</button>
+        <div id="info-content"></div>
+    </div>
+    <div id="legend">
+        <h3>图例 | Legend</h3>
+        <div class="legend-item"><div class="legend-color" style="background: #64d4ff;"></div><span>问题节点 | Question Nodes</span></div>
+        <div class="legend-item"><div class="legend-line" style="background: #ff4444;"></div><span>算力-水系统性挤压路径 | Computing-Water Systemic Compression Path</span></div>
+        <div class="legend-item"><div class="legend-line" style="background: #4488ff;"></div><span>能源-水错配与供应链悖论路径 | Energy-Water Mismatch & Supply Chain Paradox Path</span></div>
+        <div class="legend-item"><div class="legend-line" style="background: #44ff88;"></div><span>社会分化-水正义断层路径 | Social Differentiation-Water Justice Gap Path</span></div>
+        <div class="legend-item"><div class="legend-line" style="background: #ff8800;"></div><span>核心路线 | Core Pathway</span></div>
+    </div>
+    <div class="controls">
+        <button onclick="resetCamera()">重置视角<br><span class="btn-en">Reset View</span></button>
+        <button onclick="showAllPaths()">显示所有路径<br><span class="btn-en">Show All Paths</span></button>
+        <button onclick="hideAllPaths()">隐藏所有路径<br><span class="btn-en">Hide All Paths</span></button>
+        <button onclick="showAllPoints()">显示所有节点<br><span class="btn-en">Show All Nodes</span></button>
+        <button onclick="hideAllPoints()">隐藏所有节点<br><span class="btn-en">Hide All Nodes</span></button>
+    </div>
+    <div class="tooltip" id="tooltip"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        var OrbitControls = (function() {
+            function OrbitControls(object, domElement) {
+                this.object = object;
+                this.domElement = domElement !== undefined ? domElement : document;
+                
+                this.target = new THREE.Vector3();
+                this.minDistance = 5;
+                this.maxDistance = 100;
+                this.minPolarAngle = 0;
+                this.maxPolarAngle = Math.PI;
+                this.enableDamping = true;
+                this.dampingFactor = 0.05;
+                this.rotateSpeed = 1.0;
+                this.zoomSpeed = 1.0;
+                this.panSpeed = 1.0;
+                this.enableRotate = true;
+                this.enableZoom = true;
+                this.enablePan = true;
+                
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                this.panOffset = new THREE.Vector3();
+                this.scale = 1;
+                
+                this.rotateStart = new THREE.Vector2();
+                this.rotateEnd = new THREE.Vector2();
+                this.rotateDelta = new THREE.Vector2();
+                
+                this.panStart = new THREE.Vector2();
+                this.panEnd = new THREE.Vector2();
+                this.panDelta = new THREE.Vector2();
+                
+                this.state = -1;
+                
+                var scope = this;
+                
+                function onMouseDown(event) {
+                    event.preventDefault();
+                    if (event.button === 0) {
+                        scope.state = 0;
+                        scope.rotateStart.set(event.clientX, event.clientY);
+                    } else if (event.button === 1) {
+                        scope.state = 1;
+                    } else if (event.button === 2) {
+                        scope.state = 2;
+                        scope.panStart.set(event.clientX, event.clientY);
+                    }
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                }
+                
+                function onMouseMove(event) {
+                    event.preventDefault();
+                    var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
+                    
+                    if (scope.state === 0) {
+                        scope.rotateEnd.set(event.clientX, event.clientY);
+                        scope.rotateDelta.subVectors(scope.rotateEnd, scope.rotateStart);
+                        scope.sphericalDelta.theta -= 2 * Math.PI * scope.rotateDelta.x / element.clientWidth * scope.rotateSpeed;
+                        scope.sphericalDelta.phi -= 2 * Math.PI * scope.rotateDelta.y / element.clientHeight * scope.rotateSpeed;
+                        scope.rotateStart.copy(scope.rotateEnd);
+                    } else if (scope.state === 1) {
+                        scope.scale *= Math.pow(0.95, event.deltaY * 0.01);
+                    } else if (scope.state === 2) {
+                        scope.panEnd.set(event.clientX, event.clientY);
+                        scope.panDelta.subVectors(scope.panEnd, scope.panStart);
+                        var offset = new THREE.Vector3().copy(scope.object.position).sub(scope.target);
+                        var targetDistance = offset.length();
+                        offset.normalize();
+                        var up = new THREE.Vector3(0, 1, 0);
+                        var right = new THREE.Vector3().crossVectors(up, offset).normalize();
+                        up.crossVectors(offset, right).normalize();
+                        scope.object.position.add(right.multiplyScalar(-scope.panDelta.x * targetDistance * 0.001));
+                        scope.object.position.add(up.multiplyScalar(scope.panDelta.y * targetDistance * 0.001));
+                        scope.target.add(right.multiplyScalar(-scope.panDelta.x * targetDistance * 0.001));
+                        scope.target.add(up.multiplyScalar(scope.panDelta.y * targetDistance * 0.001));
+                        scope.panStart.copy(scope.panEnd);
+                    }
+                }
+                
+                function onMouseUp() {
+                    scope.state = -1;
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+                
+                this.domElement.addEventListener('mousedown', onMouseDown);
+                this.domElement.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+                this.domElement.addEventListener('wheel', function(e) {
+                    e.preventDefault();
+                    scope.scale *= Math.pow(0.95, e.deltaY * 0.01);
+                }, { passive: false });
+
+                var touchStart = new THREE.Vector2();
+                var touchCurrent = new THREE.Vector2();
+                var touchDelta = new THREE.Vector2();
+                var touchPinchStartDistance = 0;
+                var touchPinchStartScale = 1;
+
+                function getTouchDistance(touches) {
+                    var dx = touches[0].clientX - touches[1].clientX;
+                    var dy = touches[0].clientY - touches[1].clientY;
+                    return Math.sqrt(dx * dx + dy * dy);
+                }
+
+                function onTouchStart(event) {
+                    event.preventDefault();
+                    if (event.touches.length === 1) {
+                        scope.state = 0;
+                        touchStart.set(event.touches[0].clientX, event.touches[0].clientY);
+                        scope.rotateStart.copy(touchStart);
+                    } else if (event.touches.length === 2) {
+                        scope.state = 1;
+                        touchPinchStartDistance = getTouchDistance(event.touches);
+                        touchPinchStartScale = scope.scale;
+                    }
+                    document.addEventListener('touchmove', onTouchMove, { passive: false });
+                    document.addEventListener('touchend', onTouchEnd);
+                }
+
+                function onTouchMove(event) {
+                    event.preventDefault();
+                    var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
+                    var touchSensitivity = 0.4;
+
+                    if (scope.state === 0 && event.touches.length === 1) {
+                        touchCurrent.set(event.touches[0].clientX, event.touches[0].clientY);
+                        touchDelta.subVectors(touchCurrent, scope.rotateStart);
+                        scope.sphericalDelta.theta -= 2 * Math.PI * touchDelta.x / element.clientWidth * scope.rotateSpeed * touchSensitivity;
+                        scope.sphericalDelta.phi -= 2 * Math.PI * touchDelta.y / element.clientHeight * scope.rotateSpeed * touchSensitivity;
+                        scope.rotateStart.copy(touchCurrent);
+                    } else if (scope.state === 1 && event.touches.length === 2) {
+                        var currentDistance = getTouchDistance(event.touches);
+                        var ratio = touchPinchStartDistance / currentDistance;
+                        scope.scale = touchPinchStartScale * ratio;
+                    }
+                }
+
+                function onTouchEnd(event) {
+                    scope.state = -1;
+                    document.removeEventListener('touchmove', onTouchMove);
+                    document.removeEventListener('touchend', onTouchEnd);
+                }
+
+                this.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+            }
+            
+            OrbitControls.prototype.update = function() {
+                var offset = new THREE.Vector3().copy(this.object.position).sub(this.target);
+                this.spherical.setFromVector3(offset);
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
+                this.spherical.radius *= this.scale;
+                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+                this.target.add(this.panOffset);
+                offset.setFromSpherical(this.spherical);
+                this.object.position.copy(this.target).add(offset);
+                this.object.lookAt(this.target);
+                
+                this.sphericalDelta.theta *= (1 - this.dampingFactor);
+                this.sphericalDelta.phi *= (1 - this.dampingFactor);
+                
+                this.scale = 1;
+                this.panOffset.set(0, 0, 0);
+            };
+            
+            return OrbitControls;
+        })();
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 50, 150);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(25, 20, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(20, 30, 20);
+        scene.add(directionalLight);
+
+        // 坐标轴数据 | Axis Data
+        const axesData = {
+            x: {
+                label: '时间维度 | Time Dimension',
+                ticks: [
+                    { value: 0, label: 'X1:2026年 | 2026', labelEn: '2026' },
+                    { value: 1, label: 'X2:2030年 | 2030', labelEn: '2030' },
+                    { value: 2, label: 'X3:2035年 | 2035', labelEn: '2035' },
+                    { value: 3, label: 'X4:2040年 | 2040', labelEn: '2040' },
+                    { value: 4, label: 'X5:2046年 | 2046', labelEn: '2046' }
+                ],
+                color: 0xff6b6b,
+                max: 4
+            },
+            y: {
+                label: '空间维度 | Spatial Dimension',
+                ticks: [
+                    { value: 0, label: 'Y1:沿海发达城市 | Coastal Cities', labelEn: 'Coastal Developed Cities' },
+                    { value: 1, label: 'Y2:沿海-内陆过渡带 | Coastal-Inland Transition', labelEn: 'Coastal-Inland Transition Zone' },
+                    { value: 2, label: 'Y3:内陆干旱城市 | Inland Arid Cities', labelEn: 'Inland Arid Cities' },
+                    { value: 3, label: 'Y4:内陆生态脆弱区 | Ecological Fragile Zones', labelEn: 'Inland Ecologically Fragile Areas' },
+                    { value: 4, label: 'Y5:跨境流域 | Transboundary Basins', labelEn: 'Transboundary River Basins' }
+                ],
+                color: 0x4ecdc4,
+                max: 4
+            },
+            z: {
+                label: '技术-社会层级 | Tech-Society Level',
+                ticks: [
+                    { value: 0, label: 'Z1:个体/家庭 | Individual', labelEn: 'Individual/Household Level' },
+                    { value: 1, label: 'Z2:社区/邻里 | Community', labelEn: 'Community/Neighborhood Level' },
+                    { value: 2, label: 'Z3:城市/工业 | Urban', labelEn: 'City/Industry Level' },
+                    { value: 3, label: 'Z4:区域/流域 | Regional', labelEn: 'Regional/Basin Level' },
+                    { value: 4, label: 'Z5:全球/系统 | Global', labelEn: 'Global/System Level' }
+                ],
+                color: 0x45b7d1,
+                max: 4
+            }
+        };
+
+        // 30个坐标点数据 | 30 Coordinate Points Data
+        const pointsData = [
+            { id: 'Q1', x: 0, y: 0, z: 2, question: '当数据用水和城市居民用水发生挤压，谁的用水先将被遏制？', questionEn: 'When data center water use competes with urban residential water, whose supply will be curtailed first?' },
+            { id: 'Q2', x: 1, y: 0, z: 2, question: '海水能否完全替代淡水冷却，并实现算力增长？', questionEn: 'Can seawater completely replace freshwater cooling and sustain computing growth?' },
+            { id: 'Q3', x: 1, y: 2, z: 2, question: '算力中心建在内陆干旱城市是否与东水西调的需求冲突？', questionEn: 'Does building computing centers in inland arid cities conflict with water diversion needs?' },
+            { id: 'Q4', x: 2, y: 1, z: 3, question: '半导体制造极度依赖超纯水，芯片产能扩张是否会进一步挤压优质淡水资源？', questionEn: 'Semiconductor manufacturing heavily relies on ultrapure water - will chip expansion further strain quality freshwater?' },
+            { id: 'Q5', x: 2, y: 2, z: 2, question: '内陆干旱城市的水资源承受能力是否还能承受算力用水？', questionEn: 'Can inland arid cities\' water capacity sustain computing water demands?' },
+            { id: 'Q6', x: 3, y: 0, z: 4, question: '海水淡化成本降低是否会催生内陆沿海地区的水资源不平等加剧？', questionEn: 'Will lower desalination costs exacerbate water inequality between coastal and inland regions?' },
+            { id: 'Q7', x: 1, y: 4, z: 4, question: '当上游国家为了维持AI竞争力大规模抽取水资源，下游国家如何保证用水权力和生态安全？', questionEn: 'When upstream nations extract water to maintain AI competitiveness, how can downstream nations protect their water rights?' },
+            { id: 'Q8', x: 0, y: 0, z: 0, question: '用户的AI查询带来的"水消费"是否值得被量化和透明化？', questionEn: 'Should the "water consumption" from AI queries be quantified and made transparent to users?' },
+            { id: 'Q9', x: 1, y: 3, z: 3, question: '光伏和风电等清洁能源也与水资源空间分布错配，清洁能源是否以另一种方式消耗资源？', questionEn: 'Clean energy like solar and wind also mismatches water distribution - does clean energy consume resources differently?' },
+            { id: 'Q10', x: 2, y: 1, z: 2, question: '火电厂的冷却用水和农业灌溉用水在优先级上如何分配？', questionEn: 'How should cooling water for thermal plants and agricultural irrigation be prioritized?' },
+            { id: 'Q11', x: 1, y: 2, z: 2, question: '氢能产业是否也是一个被低估的耗水大户？', questionEn: 'Is the hydrogen industry an underestimated major water consumer?' },
+            { id: 'Q12', x: 3, y: 4, z: 4, question: '上游国家建立水坝改变了下游的水量水质，这种能源主权和下游水权的问题该如何解决？', questionEn: 'When upstream dams alter downstream water quantity and quality, how can energy sovereignty and water rights conflicts be resolved?' },
+            { id: 'Q13', x: 0, y: 0, z: 1, question: '屋顶光伏的个人发电设施能否与个人水处理结合？', questionEn: 'Can rooftop solar power generation be integrated with personal water treatment?' },
+            { id: 'Q14', x: 2, y: 3, z: 3, question: '部分生态脆弱区在同时遭遇能源耗水和气候变化，是否会产生进一步崩溃？', questionEn: 'Will ecologically fragile areas collapse further when facing both energy water consumption and climate change?' },
+            { id: 'Q15', x: 3, y: 1, z: 4, question: '关键矿物的开采与提炼同样是耗水大户，是否被国际水资源核算体系完全忽视？', questionEn: 'Critical mineral mining and refining are major water consumers - is this ignored by international water accounting?' },
+            { id: 'Q16', x: 1, y: 2, z: 0, question: '如果城市供水方式从不限量供水，改为定量供水对于居民的生活和心理会产生怎样的冲击？', questionEn: 'What psychological and lifestyle impacts will residents face if water supply shifts from unlimited to quota-based?' },
+            { id: 'Q17', x: 2, y: 1, z: 1, question: '海平面上升引发的海水入侵，使滨海城市含水层持续盐碱化，社区饮用水安全如何维持？', questionEn: 'As sea level rise causes saltwater intrusion in coastal aquifers, how can community drinking water safety be maintained?' },
+            { id: 'Q18', x: 1, y: 3, z: 0, question: '水难民如何重新构建社会互助网络？', questionEn: 'How can water refugees rebuild social support networks?' },
+            { id: 'Q19', x: 2, y: 4, z: 4, question: '水难民身份是否应该被承认？', questionEn: 'Should water refugee status be officially recognized?' },
+            { id: 'Q20', x: 3, y: 0, z: 2, question: '未来是否会存在，富裕社区使用个人淡化，贫困社区使用日益枯竭的公共水资源？', questionEn: 'Will wealthy communities use personal desalination while poor communities rely on depleted public water?' },
+            { id: 'Q21', x: 1, y: 3, z: 3, question: '在农业占全球取水量72%的现实下，极度缺水的内陆生态区要不要放弃传统大田农业，转为依赖进口粮食与垂直农场？', questionEn: 'Given agriculture uses 72% of global water, should arid inland zones abandon traditional farming for imports and vertical farms?' },
+            { id: 'Q22', x: 3, y: 1, z: 1, question: '当水资源短缺引发粮食安全问题时，过渡带城市低收入群体在"水-食物"关联链条上的脆弱性会不会被急剧放大？', questionEn: 'When water scarcity causes food insecurity, will low-income groups in transition zones face amplified vulnerability?' },
+            { id: 'Q23', x: 2, y: 4, z: 4, question: '共享同一跨境流域的国家之间，能否在2035年之前建立起一套具备法律约束力的"水信息共享与紧急调配"机制？', questionEn: 'Can nations sharing transboundary basins establish legally binding water information sharing and emergency allocation by 2035?' },
+            { id: 'Q24', x: 4, y: 0, z: 0, question: '在未来个人用水权是否会像如今的碳排量配额一样有所限制并可交易？', questionEn: 'Will individual water rights in the future be capped and tradable like carbon quotas today?' },
+            { id: 'Q25', x: 0, y: 1, z: 2, question: '当水资源日益紧缺，我们对海水淡化的标准是否会降低？', questionEn: 'As water becomes scarcer, will we lower desalination water quality standards?' },
+            { id: 'Q26', x: 1, y: 3, z: 3, question: '当地下水成为生态脆弱区最后的水源时，最后一滴水也不能喝了吗？', questionEn: 'When groundwater is the last source in fragile zones, is even the last drop unfit to drink?' },
+            { id: 'Q27', x: 2, y: 0, z: 2, question: '污水浓度持续上升，大规模回灌至沿海城市饮用水系统时，这些污染物的健康风险如何评估？', questionEn: 'As wastewater concentration rises and recharges coastal drinking water systems, how should health risks be assessed?' },
+            { id: 'Q28', x: 1, y: 1, z: 1, question: '当污染导致富营养化，使水源在每年夏季季节性失效——是否要在特定月份依赖储存水源或远程应急调水？', questionEn: 'When pollution causes eutrophication making water sources seasonally fail in summer - must we rely on stored or remote emergency water?' },
+            { id: 'Q29', x: 3, y: 3, z: 0, question: '当淡水资源总量减少导致自然稀释能力下降，内陆生态脆弱区的生活用水是否会面临水量不够、浓度超标的双重问题？', questionEn: 'As total freshwater decreases and natural dilution capacity drops, will inland fragile zones face insufficient quantity and excess concentration?' },
+            { id: 'Q30', x: 4, y: 4, z: 4, question: '到2046年，全球淡水生态系统的退化是否会达到不可逆的地步——即使人类立刻停止污染和超采，一些流域可能无法恢复生态？', questionEn: 'By 2046, will global freshwater ecosystem degradation reach irreversible levels - even if pollution and over-extraction stop immediately?' }
+        ];
+
+        // 三条路径数据 | Three Paths Data
+        const pathsData = [
+            {
+                id: 'path1',
+                name: '算力-水系统性挤压路径',
+                nameEn: 'Computing-Water Systemic Compression Path',
+                color: 0xff4444,
+                points: ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q8'],
+                description: '算力扩张的水危机不是一个工程技术问题，而是一个"空间位移→尺度升级→技术悖论→个体归因"的复杂系统闭环。',
+                descriptionEn: 'The water crisis from computing expansion is not an engineering problem, but a complex systemic loop: spatial displacement → scale upgrade → technical paradox → individual attribution.',
+                painPoints: '设计痛点：需要一种能让沿海高算力消耗者"看见"自己如何挤占内陆生态用水的交互界面，从而在个体层面产生责任闭环。',
+                painPointsEn: 'Design Pain Point: Need an interface that lets coastal high-computing consumers "see" how they squeeze inland ecological water, creating responsibility feedback at individual level.'
+            },
+            {
+                id: 'path2',
+                name: '能源-水错配与供应链悖论路径',
+                nameEn: 'Energy-Water Mismatch & Supply Chain Paradox Path',
+                color: 0x4488ff,
+                points: ['Q13', 'Q9', 'Q11', 'Q10', 'Q14', 'Q12', 'Q15'],
+                description: '能源转型并非天然节水，它是一个从局部闭环幻想→技术悖论暴露→新旧矛盾叠加→生态崩溃→地缘外溢→供应链隐性成本的层层剥茧过程。',
+                descriptionEn: 'Energy transition is not inherently water-saving: it reveals layers from local closed-loop fantasy → technical paradox → overlapping conflicts → ecological collapse → geopolitical spillover → supply chain hidden costs.',
+                painPoints: '设计痛点：需要建立一个覆盖能源全供应链（从矿产到发电）的"水-能"透明化核算与协同优化系统，让能源规划不再是一个"水盲"产业。',
+                painPointsEn: 'Design Pain Point: Need a "water-energy" transparent accounting and optimization system covering the full supply chain (from minerals to power), making energy planning no longer "water-blind".'
+            },
+            {
+                id: 'path3',
+                name: '社会分化-水正义断层路径',
+                nameEn: 'Social Differentiation-Water Justice Gap Path',
+                color: 0x44ff88,
+                points: ['Q16', 'Q18', 'Q28', 'Q17', 'Q20', 'Q22', 'Q24'],
+                description: '淡水危机本质的终点不是物理干涸，而是社会干涸——即社会纽带在分配不公中崩断。这条路径从个体生存差异→社区瘫痪→阶层隔离→食物链传导→制度性冷漠，勾勒出一幅令人警醒的未来社会图景。',
+                descriptionEn: 'The ultimate endpoint of freshwater crisis is not physical drying, but social drying - social bonds breaking under unfair distribution. This path traces individual survival differences → community paralysis → class segregation → food chain transmission → institutional indifference.',
+                painPoints: '设计痛点：如何设计一种"反市场极化"的、保障基本水人权的分布式基础设施，使得最脆弱群体不会被水市场淘汰。',
+                painPointsEn: 'Design Pain Point: How to design "anti-market polarization" distributed infrastructure that guarantees basic water human rights, ensuring vulnerable groups are not eliminated by the water market.'
+            },
+            {
+                id: 'path4',
+                name: '核心路线',
+                nameEn: 'Core Pathway',
+                color: 0xff8800,
+                points: ['Q8', 'Q16', 'Q17', 'Q25', 'Q26', 'Q28', 'Q29'],
+                description: '在未来5-15年内，当普通个体面临"水质不可知"与"水量不可靠"的双重焦虑时，如何通过一个可感知、可信任、可扩展的智能水处理单元，重建人与水之间的确定性关系？',
+                descriptionEn: 'In the next 5-15 years, when ordinary individuals face the dual anxiety of "unknown water quality" and "unreliable water quantity", how can we rebuild the deterministic relationship between humans and water through a perceptible, trustworthy, and scalable intelligent water treatment unit?',
+                painPoints: '设计切入点：以个体智能水处理单元为核心，从水的可感知性、可信任性、可扩展性三个维度出发，构建人与水之间的新型确定性关系。',
+                painPointsEn: 'Design Entry Point: Taking individual intelligent water treatment units as the core, starting from three dimensions - perceptibility, trustworthiness, and scalability - to build a new deterministic relationship between humans and water.'
+            }
+        ];
+
+        let pointMeshes = [];
+        let pathLines = [];
+        let pathTubes = [];
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let tooltip = document.getElementById('tooltip');
+        let infoPanel = document.getElementById('info-panel');
+        let infoContent = document.getElementById('info-content');
+
+        // 缩放因子 | Scale Factor
+        const SCALE = 3;
+
+        function createAxis() {
+            const axisLength = 15;
+
+            // X轴 | X Axis
+            const xGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(axisLength, 0, 0)]);
+            const xAxis = new THREE.Line(xGeometry, new THREE.LineBasicMaterial({ color: axesData.x.color, linewidth: 2 }));
+            scene.add(xAxis);
+
+            // Y轴 | Y Axis
+            const yGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisLength, 0)]);
+            const yAxis = new THREE.Line(yGeometry, new THREE.LineBasicMaterial({ color: axesData.y.color, linewidth: 2 }));
+            scene.add(yAxis);
+
+            // Z轴 | Z Axis
+            const zGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, axisLength)]);
+            const zAxis = new THREE.Line(zGeometry, new THREE.LineBasicMaterial({ color: axesData.z.color, linewidth: 2 }));
+            scene.add(zAxis);
+
+            // X轴刻度 | X Axis Ticks
+            axesData.x.ticks.forEach(tick => {
+                const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(tick.value * SCALE, -0.15, 0),
+                    new THREE.Vector3(tick.value * SCALE, 0.15, 0)
+                ]), new THREE.LineBasicMaterial({ color: axesData.x.color }));
+                scene.add(marker);
+                const sprite = createTextSprite(tick.label, '#ff6b6b');
+                sprite.position.set(tick.value * SCALE, -0.8, 0);
+                scene.add(sprite);
+            });
+
+            // Y轴刻度 | Y Axis Ticks
+            axesData.y.ticks.forEach(tick => {
+                const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-0.15, tick.value * SCALE, 0),
+                    new THREE.Vector3(0.15, tick.value * SCALE, 0)
+                ]), new THREE.LineBasicMaterial({ color: axesData.y.color }));
+                scene.add(marker);
+                const sprite = createTextSprite(tick.label, '#4ecdc4');
+                sprite.position.set(-0.8, tick.value * SCALE, 0);
+                scene.add(sprite);
+            });
+
+            // Z轴刻度 | Z Axis Ticks
+            axesData.z.ticks.forEach(tick => {
+                const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-0.15, 0, tick.value * SCALE),
+                    new THREE.Vector3(0.15, 0, tick.value * SCALE)
+                ]), new THREE.LineBasicMaterial({ color: axesData.z.color }));
+                scene.add(marker);
+                const sprite = createTextSprite(tick.label, '#45b7d1');
+                sprite.position.set(-0.8, 0, tick.value * SCALE);
+                scene.add(sprite);
+            });
+
+            // 轴标签 | Axis Labels
+            const xLabel = createTextSprite('时间维度 | Time', '#ff6b6b');
+            xLabel.position.set(axisLength + 1, 0, 0);
+            scene.add(xLabel);
+
+            const yLabel = createTextSprite('空间维度 | Space', '#4ecdc4');
+            yLabel.position.set(0, axisLength + 1, 0);
+            scene.add(yLabel);
+
+            const zLabel = createTextSprite('技术-社会 | Tech-Society', '#45b7d1');
+            zLabel.position.set(0, 0, axisLength + 1);
+            scene.add(zLabel);
+        }
+
+        function createTextSprite(text, color) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            ctx.fillStyle = 'rgba(10, 10, 26, 0.9)';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, canvas.width, canvas.height, 12);
+            ctx.fill();
+            ctx.fillStyle = color;
+            ctx.font = 'bold 24px Microsoft YaHei, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+
+        function createGrid() {
+            const gridHelper = new THREE.GridHelper(15, 5, 0x224466, 0x113355);
+            scene.add(gridHelper);
+        }
+
+        function createPoints() {
+            pointsData.forEach(point => {
+                const geometry = new THREE.SphereGeometry(0.2, 32, 32);
+                const material = new THREE.MeshPhongMaterial({
+                    color: 0x64d4ff,
+                    emissive: 0x113344,
+                    emissiveIntensity: 0.6,
+                    shininess: 100
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(point.x * SCALE, point.y * SCALE, point.z * SCALE);
+                mesh.userData = { type: 'point', data: point };
+
+                const glow = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3, 32, 32),
+                    new THREE.MeshBasicMaterial({ color: 0x64d4ff, transparent: true, opacity: 0.15 })
+                );
+                mesh.add(glow);
+
+                const label = createTextSprite(point.id, '#64d4ff');
+                label.position.set(0, 0.6, 0);
+                label.scale.set(0.8, 0.2, 1);
+                mesh.add(label);
+
+                pointMeshes.push(mesh);
+                scene.add(mesh);
+            });
+        }
+
+        function createPaths() {
+            pathsData.forEach(path => {
+                const pathPoints = path.points.map(id => {
+                    const pointData = pointsData.find(p => p.id === id);
+                    return new THREE.Vector3(pointData.x * SCALE, pointData.y * SCALE, pointData.z * SCALE);
+                });
+
+                const curve = new THREE.CatmullRomCurve3(pathPoints);
+                const curvePoints = curve.getPoints(100);
+                
+                // 路径线 | Path Line
+                const line = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints(curvePoints),
+                    new THREE.LineBasicMaterial({ color: path.color, linewidth: 3 })
+                );
+                line.userData = { type: 'path', data: path };
+                pathLines.push(line);
+                scene.add(line);
+
+                // 路径管 | Path Tube
+                const tube = new THREE.Mesh(
+                    new THREE.TubeGeometry(curve, 100, 0.08, 16, false),
+                    new THREE.MeshBasicMaterial({ color: path.color, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
+                );
+                tube.userData = { type: 'path', data: path };
+                pathTubes.push(tube);
+                scene.add(tube);
+            });
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const allObjects = [...pointMeshes, ...pathLines, ...pathTubes];
+            const intersects = raycaster.intersectObjects(allObjects);
+
+            if (intersects.length > 0) {
+                const data = intersects[0].object.userData.data;
+                tooltip.style.display = 'block';
+                tooltip.style.left = event.clientX + 15 + 'px';
+                tooltip.style.top = event.clientY + 15 + 'px';
+
+                if (intersects[0].object.userData.type === 'point') {
+                    tooltip.innerHTML = '<strong>' + data.id + '</strong><br>' + data.question.substring(0, 40) + '...<br><span style="color:#888;font-size:11px;">' + data.questionEn.substring(0, 50) + '...</span>';
+                } else {
+                    tooltip.innerHTML = '<strong>' + data.name + ' | ' + data.nameEn + '</strong><br>' + data.description.substring(0, 40) + '...';
+                }
+                document.body.style.cursor = 'pointer';
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        function onClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const allObjects = [...pointMeshes, ...pathLines, ...pathTubes];
+            const intersects = raycaster.intersectObjects(allObjects);
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                const data = obj.userData.data;
+
+                if (obj.userData.type === 'point') {
+                    const coordStr = `X${data.x + 1}, Y${data.y + 1}, Z${data.z + 1}`;
+                    infoContent.innerHTML = '<h2>' + data.id + ' (' + coordStr + ')</h2>' +
+                        '<div class="label">问题内容 | Question Content</div>' +
+                        '<div class="description">' + data.question + '</div>' +
+                        '<div class="description" style="margin-top:8px;color:#888;">' + data.questionEn + '</div>' +
+                        '<div class="label">坐标位置 | Coordinate Position</div>' +
+                        '<div class="label-en">Coordinates</div>' +
+                        '<p>X: ' + axesData.x.ticks[data.x].label + '</p>' +
+                        '<p>Y: ' + axesData.y.ticks[data.y].label + '</p>' +
+                        '<p>Z: ' + axesData.z.ticks[data.z].label + '</p>';
+                } else {
+                    const colorHex = '#' + data.color.toString(16).padStart(6, '0');
+                    infoContent.innerHTML = '<h2><span class="path-color" style="background: ' + colorHex + ';"></span>' + data.name + '</h2>' +
+                        '<div class="subtitle">' + data.nameEn + '</div>' +
+                        '<div class="label">路径说明 | Path Description</div>' +
+                        '<div class="label-en">Description</div>' +
+                        '<div class="description">' + data.description + '</div>' +
+                        '<div class="description" style="margin-top:8px;color:#888;">' + data.descriptionEn + '</div>' +
+                        '<div class="label">设计痛点 | Design Pain Points</div>' +
+                        '<div class="label-en">Pain Points</div>' +
+                        '<div class="description">' + data.painPoints + '</div>' +
+                        '<div class="description" style="margin-top:8px;color:#888;">' + data.painPointsEn + '</div>' +
+                        '<div class="label">连接节点 | Connected Nodes</div>' +
+                        '<div class="label-en">Nodes</div>' +
+                        '<p>' + data.points.join(' → ') + '</p>';
+                }
+                infoPanel.classList.add('active');
+            }
+        }
+
+        window.closeInfoPanel = function() { infoPanel.classList.remove('active'); };
+        window.resetCamera = function() { camera.position.set(25, 20, 25); controls.target.set(6, 6, 6); };
+        window.showAllPaths = function() { pathLines.forEach(l => l.visible = true); pathTubes.forEach(t => t.visible = true); };
+        window.hideAllPaths = function() { pathLines.forEach(l => l.visible = false); pathTubes.forEach(t => t.visible = false); };
+        window.showAllPoints = function() { pointMeshes.forEach(p => p.visible = true); };
+        window.hideAllPoints = function() { pointMeshes.forEach(p => p.visible = false); };
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            pointMeshes.forEach(mesh => { mesh.rotation.y += 0.003; });
+            renderer.render(scene, camera);
+        }
+
+        createAxis();
+        createGrid();
+        createPoints();
+        createPaths();
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
+        window.addEventListener('resize', onWindowResize);
+
+        var touchTapStart = { x: 0, y: 0, time: 0 };
+        var touchTapMoved = false;
+        var TAP_MOVE_THRESHOLD = 12;
+        var TAP_TIME_THRESHOLD = 300;
+
+        function onTouchTapStart(event) {
+            if (event.touches.length === 1) {
+                touchTapStart.x = event.touches[0].clientX;
+                touchTapStart.y = event.touches[0].clientY;
+                touchTapStart.time = Date.now();
+                touchTapMoved = false;
+            }
+        }
+
+        function onTouchTapMove(event) {
+            if (event.touches.length === 1 && !touchTapMoved) {
+                var dx = event.touches[0].clientX - touchTapStart.x;
+                var dy = event.touches[0].clientY - touchTapStart.y;
+                if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_THRESHOLD) {
+                    touchTapMoved = true;
+                }
+            }
+        }
+
+        function onTouchTapEnd(event) {
+            if (!touchTapMoved && Date.now() - touchTapStart.time < TAP_TIME_THRESHOLD) {
+                var fakeEvent = {
+                    clientX: touchTapStart.x,
+                    clientY: touchTapStart.y
+                };
+                onClick(fakeEvent);
+            }
+        }
+
+        renderer.domElement.addEventListener('touchstart', onTouchTapStart, { passive: true });
+        renderer.domElement.addEventListener('touchmove', onTouchTapMove, { passive: true });
+        renderer.domElement.addEventListener('touchend', onTouchTapEnd, { passive: true });
+
+        animate();
+    </script>
+</body>
+</html>
